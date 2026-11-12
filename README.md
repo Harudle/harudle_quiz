@@ -14,6 +14,7 @@
 
 1. [supabase.com](https://supabase.com)에서 새 프로젝트를 만들어요. Region은 **Northeast Asia (Seoul)** 를 추천해요.
 2. SQL Editor에서 `supabase/schema.sql` 내용을 붙여넣고 실행해요. 테이블과 `quiz-images` 버킷이 만들어져요.
+   - 이미 쓰고 있던 DB라면 `supabase/migrations/`의 파일을 번호 순서대로 한 번씩 실행해요. (`npm run migrate -- supabase/migrations/001-nickname-per-category.sql`)
 3. 아래 값을 챙겨둬요.
    - **Connect → Transaction pooler** 연결 문자열 (6543 포트) → `DATABASE_URL`
    - **Project Settings → API**의 Project URL → `SUPABASE_URL`
@@ -55,9 +56,10 @@ npm run import-json
 - 장르를 고르면 등록된 문제 중에서 **랜덤으로 한 판**이 나와요. 한 판 문제 수는 관리자가 장르별로 정해요. (기본 5문제)
 - 문제마다 제한 시간 5초. 그림이 뜨면 시간이 흐르고, 시간 안에는 몇 번이든 답할 수 있어요. 1번 틀리면 힌트를 볼 수 있어요. 모르면 패스.
 - 점수: 맞힌 문제마다 1점.
-- 다 풀면 닉네임을 등록해서 장르별 누적 랭킹에 올라가요. 장르마다 하루에 처음 푼 판만 들어가요.
+- 한 기기로 여러 명이 돌아가며 하는 걸 전제로 해요. 판이 끝날 때마다 닉네임을 새로 입력하면 그 판 점수가 랭킹에 올라가요.
+- 닉네임은 장르마다 따로라서, 다른 장르에서는 같은 닉네임을 또 쓸 수 있어요. 같은 장르 안에서는 겹칠 수 없어요.
 - 결과 화면에서 정답과 내 답을 확인하고, 다시 풀기로 새 랜덤 판을 풀 수 있어요.
-- 닉네임과 풀이 기록은 브라우저에 저장하지 않아요. 새로고침하면 처음부터예요.
+- 닉네임과 풀이 기록은 브라우저에 저장하지 않아요.
 
 ## 관리자
 
@@ -80,7 +82,7 @@ scripts/import-json.js  예전 data/ 를 Supabase 로 옮기기
 src/shared.js        서버·브라우저 공용 (카테고리, 정답 비교, 날짜)
 src/app.js           화면 (홈, 퀴즈, 관리자)
 src/api.js           API 호출
-src/game.js          결과 계산·표시, 닉네임 (브라우저에 저장하지 않음)
+src/game.js          결과 계산·표시
 src/image.js         업로드 사진 압축
 src/styles.css       스타일
 ```

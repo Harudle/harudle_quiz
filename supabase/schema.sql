@@ -27,13 +27,16 @@ create table if not exists settings (
   round_size int not null
 );
 
+-- 닉네임은 장르마다 따로예요. (같은 닉네임을 다른 장르에서 또 쓸 수 있어요)
 create table if not exists players (
   id text primary key,
+  category text,
   nickname text not null,
-  nickname_norm text not null unique,     -- 띄어쓰기·대소문자를 무시한 중복 검사용
+  nickname_norm text not null,            -- 띄어쓰기·대소문자를 무시한 중복 검사용
   token_hash text not null unique,
   created_at timestamptz not null default now()
 );
+create unique index if not exists players_category_nickname_idx on players (category, nickname_norm);
 
 -- 오늘의 한 판 결과 (플레이어·날짜·장르마다 한 번)
 create table if not exists results (

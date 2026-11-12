@@ -39,12 +39,8 @@ export const sendGuess = (id, guess) => request(`/quizzes/${enc(id)}/guess`, { m
 export const getHint = (id) => request(`/quizzes/${enc(id)}/hint`, { method: 'POST', body: {} });
 export const getAnswer = (id) => request(`/quizzes/${enc(id)}/answer`, { method: 'POST', body: {} });
 
-export const createPlayer = (nickname) => request('/players', { method: 'POST', body: { nickname } });
 export const submitResult = (payload) => request('/results', { method: 'POST', body: payload });
-export const getRankings = (limit, playerToken) =>
-  request(`/rankings?limit=${limit}`, {
-    headers: playerToken ? { 'X-Player-Token': playerToken } : {},
-  });
+export const getRankings = (limit) => request(`/rankings?limit=${limit}`);
 
 // ---- 관리자 ----
 export function getAdminToken() {

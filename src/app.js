@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import { compressImage, loadImage } from './image.js';
 import { CATEGORIES, HINT_AFTER, NICKNAME_RULE, TIME_LIMIT, normalize } from './shared.js';
-import { getPlayer, itemMark, setPlayer, summarize } from './game.js';
+import { itemMark, summarize } from './game.js';
 
 const view = document.getElementById('view');
 const headerRight = document.getElementById('header-right');
@@ -56,12 +56,12 @@ function openZoom(src, caption = '') {
   dialog.showModal();
 }
 
-function rankList(rows, meNickname, emptyText) {
+function rankList(rows, emptyText) {
   if (!rows.length) return `<p class="rank-empty">${emptyText}</p>`;
   return `<ol class="rank-list">${rows
     .map(
       (r) => `
-      <li class="${r.nickname === meNickname ? 'is-me' : ''}">
+      <li>
         <span class="rank-no">${r.rank <= 3 ? MEDALS[r.rank - 1] : r.rank}</span>
         <span class="rank-name">${esc(r.nickname)}</span>
         <span class="rank-score"><b>${r.points}</b>점 <small>${r.correct}/${r.total}</small></span>
@@ -220,16 +220,15 @@ async function renderHome() {
 
   // 랭킹 보드
   const board = view.querySelector('.board-grid');
-  const player = getPlayer();
   const loadBoard = async () => {
     try {
-      const { rankings } = await api.getRankings(5, player?.token);
+      const { rankings } = await api.getRankings(5);
       board.innerHTML = Object.entries(CATEGORIES)
         .map(
           ([key, c]) => `
           <div class="card board-card">
             <p class="board-title">${c.emoji} ${c.label}</p>
-            ${rankList(rankings[key].top, player?.nickname, '첫 번째 주인공이 되어보세요')}
+            ${rankList(rankings[key].top, '첫 번째 주인공이 되어보세요')}
             <a class="board-more" href="#/ranking?c=${key}">전체 순위 ${ARROW}</a>
           </div>`,
         )
@@ -275,6 +274,7 @@ async function renderPlay(category, mode, quizId) {
   const hints = {};
   let busy = false;
   let nicknameError = '';
+  let nicknameDraft = '';
 
   const total = quizzes.length;
   const LIMIT_MS = TIME_LIMIT * 1000;
@@ -440,37 +440,26 @@ async function renderPlay(category, mode, quizId) {
   };
 
   // ----- 한 판 결과 -----
-  const submit = async () => {
-    const player = getPlayer();
-    if (!isDaily || rec.submitted || !player) return;
-    try {
-      const res = await api.submitResult({
-        token: player.token,
-        round: roundToken,
-        category,
-        items: rec.items.map((it, i) => ({ quizId: ids[i], guesses: it.guesses })),
-      });
-      rec.submitted = { rank: res.rank, participants: res.participants };
-    } catch (err) {
-      if (err.status === 401) setPlayer(null);
-      else if (err.status === 409) rec.submitted = { rank: null, participants: 0, error: err.message };
-      nicknameError = err.status === 401 ? '닉네임을 다시 등록해주세요.' : err.message;
-    }
-    drawSummary();
+  // 한 기기로 여러 명이 돌아가며 해서, 판마다 닉네임을 새로 받아 결과와 함께 올려요. (닉네임은 기억하지 않아요)
+  const submit = async (nickname) => {
+    const res = await api.submitResult({
+      nickname,
+      round: roundToken,
+      category,
+      items: rec.items.map((it, i) => ({ quizId: ids[i], guesses: it.guesses })),
+    });
+    rec.submitted = { nickname: res.nickname, rank: res.rank, participants: res.participants };
   };
 
   const rankBox = () => {
     if (!isDaily) return '';
-    const player = getPlayer();
-    if (rec.submitted?.error) return `<div class="rank-box"><p>${esc(rec.submitted.error)}</p></div>`;
     if (rec.submitted) {
       return `
         <a class="rank-box is-done" href="#/ranking?c=${category}">
-          <span>${esc(player?.nickname ?? '')} · ${c.label} 랭킹</span>
+          <span>${esc(rec.submitted.nickname)} · ${c.label} 랭킹</span>
           <strong>${rec.submitted.rank ? `${rec.submitted.rank}위` : '-'}<small> / ${rec.submitted.participants}명</small></strong>
         </a>`;
     }
-    if (player) return '<div class="rank-box"><p>랭킹에 올리는 중…</p></div>';
     return `
       <form class="rank-box nick-form" autocomplete="off">
         <div class="nick-head">
@@ -481,7 +470,7 @@ async function renderPlay(category, mode, quizId) {
           </div>
         </div>
         <div class="nick-row">
-          <input id="nickname" name="nickname" class="input" type="text" minlength="2" maxlength="12" placeholder="닉네임 (2~12자)" />
+          <input id="nickname" name="nickname" class="input" type="text" minlength="2" maxlength="12" placeholder="닉네임 (2~12자)" value="${esc(nicknameDraft)}" />
           <button type="submit" class="btn btn-dark">등록</button>
         </div>
         ${nicknameError ? `<p class="form-error">${esc(nicknameError)}</p>` : ''}
@@ -539,18 +528,20 @@ async function renderPlay(category, mode, quizId) {
     nickForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const nickname = nickForm.nickname.value.trim();
+      nicknameDraft = nickname;
       if (!NICKNAME_RULE.test(nickname)) {
         nicknameError = '닉네임은 2~12자 한글·영문·숫자로 지어주세요.';
         drawSummary();
+        view.querySelector('#nickname')?.focus();
         return;
       }
       const btn = nickForm.querySelector('button');
       btn.disabled = true;
       try {
-        setPlayer(await api.createPlayer(nickname));
+        await submit(nickname);
         nicknameError = '';
-        toast(`${nickname}님, 반가워요!`);
-        await submit();
+        toast(`${nickname}님, 랭킹에 올렸어요!`);
+        drawSummary();
       } catch (err) {
         nicknameError = err.message;
         drawSummary();
@@ -564,7 +555,7 @@ async function renderPlay(category, mode, quizId) {
       // 넘어가면서 받아오던 정답이 다 도착하면 결과를 보여줘요.
       await Promise.all(rec.items.map((it) => it.answerLoading));
       drawSummary();
-      if (isDaily && !rec.submitted && getPlayer()) submit();
+      view.querySelector('#nickname')?.focus({ preventScroll: true });
     } else drawQuestion();
   };
 
@@ -577,10 +568,8 @@ async function renderPlay(category, mode, quizId) {
 async function renderRanking() {
   const q = queryOf();
   const category = CATEGORIES[q.get('c')] ? q.get('c') : 'movie';
-  const player = getPlayer();
-  const { rankings } = await api.getRankings(50, player?.token);
+  const { rankings } = await api.getRankings(50);
   const data = rankings[category];
-  const meOutside = data.me && !data.top.some((r) => r.nickname === data.me.nickname);
 
   const tabs = Object.entries(CATEGORIES)
     .map(
@@ -595,13 +584,12 @@ async function renderRanking() {
       <div class="page-head">
         <h1 class="title">${CATEGORIES[category].label} <mark>랭킹</mark></h1>
       </div>
-      <p class="lead">누적 점수 · ${data.participants}명</p>
+      <p class="lead">${data.participants}명 참여</p>
       <nav class="filters" aria-label="장르">${tabs}</nav>
       <div class="card rank-card">
-        ${rankList(data.top, player?.nickname, '아직 기록이 없어요')}
-        ${meOutside ? `<div class="rank-me">${rankList([data.me], player.nickname, '')}</div>` : ''}
+        ${rankList(data.top, '아직 기록이 없어요')}
       </div>
-      <p class="footnote">맞힌 문제마다 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
+      <p class="footnote">맞힌 문제마다 1점</p>
     </div>`;
 }
 
@@ -730,7 +718,7 @@ async function renderAdminList() {
         <div class="setting-row">
           <span class="setting-label">${c.emoji} ${c.label}</span>
           <button type="button" class="btn btn-line btn-sm btn-reset" data-reset="${key}" ${n ? '' : 'disabled'}>초기화</button>
-          <span class="setting-note">${n ? `${n}명 기록` : '기록이 없어요'}</span>
+          <span class="setting-note">${n ? `닉네임 ${n}명` : '기록이 없어요'}</span>
         </div>`;
     })
     .join('');
@@ -788,7 +776,7 @@ async function renderAdminList() {
       <section class="card settings-card">
         <div class="settings-head">
           <h2 class="title-xs">랭킹 초기화</h2>
-          <p>장르의 누적 랭킹 기록을 모두 지워요. 문제와 닉네임은 그대로예요.</p>
+          <p>장르의 누적 랭킹 기록과 닉네임을 모두 지워요. 지운 닉네임은 다시 등록할 수 있고, 문제는 그대로예요.</p>
         </div>
         <div class="settings-rows">${resetRows}</div>
       </section>
@@ -837,7 +825,7 @@ async function renderAdminList() {
     btn.addEventListener('click', async () => {
       const key = btn.dataset.reset;
       const { label } = CATEGORIES[key];
-      if (!confirm(`${label} 랭킹을 초기화할까요?\n${rankingCounts[key]}명의 기록이 모두 지워지고 되돌릴 수 없어요.`)) return;
+      if (!confirm(`${label} 랭킹을 초기화할까요?\n닉네임 ${rankingCounts[key]}명과 기록이 모두 지워지고 되돌릴 수 없어요.`)) return;
       btn.disabled = true;
       try {
         await api.adminResetRanking(key);

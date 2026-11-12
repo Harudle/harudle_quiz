@@ -11,7 +11,8 @@
     "start": "node --env-file=.env server.js",
     "dev": "node --env-file=.env --watch server.js",
     "build": "rm -rf dist && mkdir dist && cp -R index.html src dist/",
-    "import-json": "node --env-file=.env scripts/import-json.js"
+    "import-json": "node --env-file=.env scripts/import-json.js",
+    "migrate": "node --env-file=.env scripts/migrate.js"
   },
   "dependencies": {
     "postgres": "^3.4.9"

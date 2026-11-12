@@ -979,11 +979,6 @@ input::placeholder {
   border-bottom: 0;
 }
 
-.rank-list li.is-me {
-  border-radius: 12px;
-  background: var(--purple-wash);
-}
-
 .rank-no {
   flex: none;
   width: 28px;
@@ -1020,12 +1015,6 @@ input::placeholder {
   font-size: 14px;
   color: var(--ink-muted);
   text-align: center;
-}
-
-.rank-me {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 2px dashed var(--mint-line);
 }
 
 .rank-card {
