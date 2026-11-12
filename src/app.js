@@ -1,7 +1,7 @@
 import * as api from './api.js';
 import { compressImage, loadImage } from './image.js';
 import { CATEGORIES, HINT_AFTER, MAX_TRIES, NICKNAME_RULE, normalize, pointsFor } from './shared.js';
-import { getPlayer, itemEmoji, setPlayer, summarize } from './game.js';
+import { getPlayer, itemMark, setPlayer, summarize } from './game.js';
 
 const view = document.getElementById('view');
 const headerRight = document.getElementById('header-right');
@@ -15,8 +15,10 @@ const esc = (s) =>
   );
 
 let toastTimer;
-function toast(message) {
+/** tone: 'miss' 이면 틀렸을 때의 붉은 토스트 */
+function toast(message, tone = '') {
   toastEl.textContent = message;
+  toastEl.classList.toggle('is-miss', tone === 'miss');
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
@@ -169,7 +171,7 @@ async function renderHome() {
         <p class="lead">문제마다 기회는 ${MAX_TRIES}번!</p>
 
         <form class="card home-card">
-          <p class="card-q">오늘은 어떤 장르?</p>
+          <p class="card-q">어떤 장르의 문제를 풀까요?</p>
           <fieldset class="options">
             <legend class="sr-only">카테고리</legend>
             ${options}
@@ -199,7 +201,7 @@ async function renderHome() {
       label.textContent = '아직 문제가 없어요';
       return;
     }
-    label.textContent = `오늘의 ${CATEGORIES[selected].label} 풀기`;
+    label.textContent = `${CATEGORIES[selected].label} 문제 풀기`;
   };
   updateLabel();
   view.querySelectorAll('input[name="category"]').forEach((input) =>
@@ -389,7 +391,7 @@ async function renderPlay(category, mode, quizId) {
       } else if (item.guesses.length >= MAX_TRIES) {
         await finishItem(item, quiz);
       } else {
-        toast(MAX_TRIES - item.guesses.length === 1 ? '땡! 마지막 기회' : '땡!');
+        toast(MAX_TRIES - item.guesses.length === 1 ? '땡! 마지막 기회' : '땡!', 'miss');
       }
     } catch (err) {
       toast(err.message);
@@ -468,7 +470,7 @@ async function renderPlay(category, mode, quizId) {
         <li class="scene">
           <button type="button" class="scene-photo" data-scene="${i}" aria-label="${esc(rec.items[i].answer)} 크게 보기">
             <img src="${esc(q.image)}" alt="" loading="lazy" />
-            <span class="scene-mark">${itemEmoji(rec.items[i])}</span>
+            ${itemMark(rec.items[i])}
           </button>
           <span class="scene-answer">${esc(rec.items[i].answer)}</span>
         </li>`,
@@ -481,7 +483,6 @@ async function renderPlay(category, mode, quizId) {
         <h1 class="score"><mark>${s.correct}</mark> / ${s.total}</h1>
         ${rankBox()}
         <ul class="scene-grid">${scenes}</ul>
-        <a class="btn btn-line btn-wide" href="#/gallery/${category}">지난 장면 보기</a>
         <a class="btn btn-dark btn-wide" href="#/practice/${category}?t=${Date.now()}">연습 한 판 더 ${ARROW}</a>
         <p class="footnote"><a href="#/ranking?c=${category}">랭킹</a> · <a href="#/">다른 장르</a></p>
       </div>`;

@@ -15,6 +15,7 @@
   --yellow: #ffd66b;
   --red: #ef5a5a;
   --red-wash: #fff0f0;
+  --red-pastel: #ffc9c4;
   --white: #ffffff;
 
   --border: 3px solid var(--ink);
@@ -825,9 +826,25 @@ input::placeholder {
 
 .scene-mark {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  font-size: 16px;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  font-family: var(--font-hand);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.scene-mark.is-hit {
+  background: var(--bg);
+}
+
+.scene-mark.is-miss {
+  background: var(--red-pastel);
 }
 
 .scene-answer {
@@ -1431,6 +1448,30 @@ input::placeholder {
 #toast.show {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* 틀렸을 때: 붉은 파스텔 스티커 + 살짝 흔들기 */
+#toast.is-miss {
+  border: var(--border);
+  background: var(--red-pastel);
+  color: var(--ink);
+}
+
+#toast.is-miss.show {
+  animation: toast-shake 0.36s ease;
+}
+
+@keyframes toast-shake {
+  0%,
+  100% {
+    transform: translate(-50%, 0);
+  }
+  25% {
+    transform: translate(calc(-50% - 6px), 0) rotate(-2deg);
+  }
+  75% {
+    transform: translate(calc(-50% + 6px), 0) rotate(2deg);
+  }
 }
 
 dialog.zoom {

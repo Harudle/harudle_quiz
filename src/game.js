@@ -12,11 +12,11 @@ export function summarize(items) {
   );
 }
 
-/** 🟩 한 번에 / 🟨 두 번째 / 🟧 세 번째 / 🟥 못 맞힘 */
-export function itemEmoji(item) {
-  if (!item.done) return '⬜';
-  if (!item.solved) return '🟥';
-  return ['🟩', '🟨', '🟧'][item.guesses.length - 1] ?? '🟧';
+/** 맞히면 O, 못 맞히면 X */
+export function itemMark(item) {
+  return item.solved
+    ? '<span class="scene-mark is-hit" aria-label="맞힘">O</span>'
+    : '<span class="scene-mark is-miss" aria-label="못 맞힘">X</span>';
 }
 
 // ---- 닉네임 (이 탭이 열려 있는 동안만) ----

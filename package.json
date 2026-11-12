@@ -2,7 +2,7 @@
   "name": "harudle-quiz",
   "version": "0.1.0",
   "private": true,
-  "description": "하루들 한컷퀴즈 — 그림 한 컷 보고 영화·드라마·애니 제목 맞히기",
+  "description": "하루들 한컷퀴즈 — 그림 한 컷 보고 영화·드라마·애니메이션 제목 맞히기",
   "type": "module",
   "engines": {
     "node": ">=20"

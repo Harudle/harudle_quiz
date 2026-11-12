@@ -2,7 +2,7 @@
 export const CATEGORIES = {
   movie: { label: '영화', emoji: '🎬', desc: '극장에서 본 그 장면' },
   drama: { label: '드라마', emoji: '📺', desc: '정주행했던 그 드라마' },
-  anime: { label: '애니', emoji: '🍥', desc: '덕심을 시험하는 한 컷' },
+  anime: { label: '애니메이션', emoji: '🍥', desc: '덕심을 시험하는 한 컷' },
 };
 
 /** 한 문제당 기회 */
