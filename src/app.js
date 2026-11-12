@@ -77,12 +77,6 @@ function rankList(rows, meNickname, emptyText) {
     .join('')}</ol>`;
 }
 
-const periodToggle = (period) => `
-  <div class="toggle" role="group" aria-label="기간">
-    <button type="button" data-period="today" aria-pressed="${period === 'today'}">오늘</button>
-    <button type="button" data-period="all" aria-pressed="${period === 'all'}">전체</button>
-  </div>`;
-
 // ---------- 라우터 ----------
 const CAT = '(movie|drama|anime)';
 const routes = [
@@ -234,7 +228,6 @@ async function renderHome() {
     <section class="board">
       <div class="board-head">
         <h2 class="title-sm">장르별 <mark>랭킹</mark></h2>
-        ${periodToggle('today')}
       </div>
       <div class="board-grid"><p class="rank-empty">불러오는 중…</p></div>
     </section>
@@ -266,17 +259,16 @@ async function renderHome() {
   // 랭킹 보드
   const board = view.querySelector('.board-grid');
   const player = getPlayer();
-  const loadBoard = async (period) => {
-    view.querySelectorAll('.board [data-period]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.period === period)));
+  const loadBoard = async () => {
     try {
-      const { rankings } = await api.getRankings(period, 5, player?.token);
+      const { rankings } = await api.getRankings(5, player?.token);
       board.innerHTML = Object.entries(CATEGORIES)
         .map(
           ([key, c]) => `
           <div class="card board-card">
             <p class="board-title">${c.emoji} ${c.label}</p>
-            ${rankList(rankings[key].top, player?.nickname, period === 'today' ? '오늘 첫 번째 주인공이 되어보세요' : '아직 기록이 없어요')}
-            <a class="board-more" href="#/ranking?c=${key}&p=${period}">전체 순위 ${ARROW}</a>
+            ${rankList(rankings[key].top, player?.nickname, '첫 번째 주인공이 되어보세요')}
+            <a class="board-more" href="#/ranking?c=${key}">전체 순위 ${ARROW}</a>
           </div>`,
         )
         .join('');
@@ -284,8 +276,7 @@ async function renderHome() {
       board.innerHTML = `<p class="rank-empty">${esc(err.message)}</p>`;
     }
   };
-  view.querySelectorAll('.board [data-period]').forEach((b) => b.addEventListener('click', () => loadBoard(b.dataset.period)));
-  loadBoard('today');
+  loadBoard();
 }
 
 // =====================================================================
@@ -516,8 +507,8 @@ async function renderPlay(category, mode, quizId) {
     if (rec.submitted?.error) return `<div class="rank-box"><p>${esc(rec.submitted.error)}</p></div>`;
     if (rec.submitted) {
       return `
-        <a class="rank-box is-done" href="#/ranking?c=${category}&p=today">
-          <span>${esc(player?.nickname ?? '')} · 오늘 ${c.label} 랭킹</span>
+        <a class="rank-box is-done" href="#/ranking?c=${category}">
+          <span>${esc(player?.nickname ?? '')} · ${c.label} 랭킹</span>
           <strong>${rec.submitted.rank ? `${rec.submitted.rank}위` : '-'}<small> / ${rec.submitted.participants}명</small></strong>
         </a>`;
     }
@@ -624,16 +615,15 @@ async function renderPlay(category, mode, quizId) {
 async function renderRanking() {
   const q = queryOf();
   const category = CATEGORIES[q.get('c')] ? q.get('c') : 'movie';
-  const period = q.get('p') === 'all' ? 'all' : 'today';
   const player = getPlayer();
-  const { rankings, day } = await api.getRankings(period, 50, player?.token);
+  const { rankings } = await api.getRankings(50, player?.token);
   const data = rankings[category];
   const meOutside = data.me && !data.top.some((r) => r.nickname === data.me.nickname);
 
   const tabs = Object.entries(CATEGORIES)
     .map(
       ([key, c]) =>
-        `<a class="filter ${key === category ? 'active' : ''}" href="#/ranking?c=${key}&p=${period}">${c.emoji} ${c.label}</a>`,
+        `<a class="filter ${key === category ? 'active' : ''}" href="#/ranking?c=${key}">${c.emoji} ${c.label}</a>`,
     )
     .join('');
 
@@ -642,22 +632,15 @@ async function renderRanking() {
       <a class="back-link" href="#/">← 홈</a>
       <div class="page-head">
         <h1 class="title">${CATEGORIES[category].label} <mark>랭킹</mark></h1>
-        ${periodToggle(period)}
       </div>
-      <p class="lead">${period === 'today' ? `${formatDay(day)} · ${data.participants}명 참여` : `누적 점수 · ${data.participants}명`}</p>
+      <p class="lead">누적 점수 · ${data.participants}명</p>
       <nav class="filters" aria-label="장르">${tabs}</nav>
       <div class="card rank-card">
-        ${rankList(data.top, player?.nickname, period === 'today' ? '오늘은 아직 기록이 없어요' : '아직 기록이 없어요')}
+        ${rankList(data.top, player?.nickname, '아직 기록이 없어요')}
         ${meOutside ? `<div class="rank-me">${rankList([data.me], player.nickname, '')}</div>` : ''}
       </div>
       <p class="footnote">한 번에 맞히면 3점, 두 번째 2점, 세 번째 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
     </div>`;
-
-  view.querySelectorAll('[data-period]').forEach((b) =>
-    b.addEventListener('click', () => {
-      location.hash = `#/ranking?c=${category}&p=${b.dataset.period}`;
-    }),
-  );
 }
 
 // =====================================================================

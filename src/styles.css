@@ -950,29 +950,6 @@ input::placeholder {
 }
 
 /* ---------- 랭킹 ---------- */
-.toggle {
-  display: inline-flex;
-  padding: 4px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--white);
-}
-
-.toggle button {
-  padding: 6px 16px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.toggle button[aria-pressed='true'] {
-  background: var(--ink);
-  color: var(--white);
-}
-
 .board {
   max-width: 1200px;
   margin: 0 auto;

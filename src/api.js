@@ -41,8 +41,8 @@ export const getAnswer = (id) => request(`/quizzes/${enc(id)}/answer`, { method:
 
 export const createPlayer = (nickname) => request('/players', { method: 'POST', body: { nickname } });
 export const submitResult = (payload) => request('/results', { method: 'POST', body: payload });
-export const getRankings = (period, limit, playerToken) =>
-  request(`/rankings?period=${period}&limit=${limit}`, {
+export const getRankings = (limit, playerToken) =>
+  request(`/rankings?limit=${limit}`, {
     headers: playerToken ? { 'X-Player-Token': playerToken } : {},
   });
 
