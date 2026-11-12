@@ -5,7 +5,7 @@ export function summarize(items) {
   return items.reduce(
     (acc, it) => ({
       correct: acc.correct + (it.solved ? 1 : 0),
-      points: acc.points + pointsFor(it.guesses.length, it.solved),
+      points: acc.points + pointsFor(it.solved),
       total: acc.total + 1,
     }),
     { correct: 0, points: 0, total: 0 },

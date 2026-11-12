@@ -31,7 +31,7 @@ const enc = encodeURIComponent;
 
 // ---- 플레이어 ----
 export const getCategories = () => request('/categories');
-export const getDaily = (category) => request(`/categories/${category}/daily`);
+export const getRound = (category) => request(`/categories/${category}/round`);
 export const getPractice = (category) => request(`/categories/${category}/practice`);
 export const getGallery = (category) => request(`/categories/${category}/gallery`);
 export const getQuiz = (id) => request(`/quizzes/${enc(id)}`);

@@ -1,6 +1,6 @@
 import * as api from './api.js';
 import { compressImage, loadImage } from './image.js';
-import { CATEGORIES, HINT_AFTER, MAX_TRIES, NICKNAME_RULE, normalize, pointsFor } from './shared.js';
+import { CATEGORIES, HINT_AFTER, NICKNAME_RULE, TIME_LIMIT, normalize } from './shared.js';
 import { getPlayer, itemMark, setPlayer, summarize } from './game.js';
 
 const view = document.getElementById('view');
@@ -83,7 +83,9 @@ const routes = [
 
 let cleanup = null;
 
-async function router() {
+/** keepScroll: 같은 화면을 다시 그릴 때 스크롤 위치를 그대로 둡니다. (관리자 삭제 등) */
+async function router({ keepScroll = false } = {}) {
+  const scrollY = keepScroll ? window.scrollY : 0;
   const path = location.hash.replace(/^#/, '').split('?')[0] || '/';
   const route = routes.find((r) => r.pattern.test(path));
   if (!route) {
@@ -97,7 +99,7 @@ async function router() {
   const isAdmin = Boolean(route.admin);
   document.body.classList.toggle('is-admin', isAdmin);
   renderHeader(isAdmin);
-  window.scrollTo(0, 0);
+  if (!keepScroll) window.scrollTo(0, 0);
 
   try {
     if (isAdmin && !api.getAdminToken()) renderAdminLogin();
@@ -118,6 +120,7 @@ async function router() {
         </section>`;
     }
   }
+  if (keepScroll) window.scrollTo(0, scrollY);
   view.focus({ preventScroll: true });
 }
 
@@ -137,7 +140,7 @@ function renderHeader(isAdmin) {
   });
 }
 
-window.addEventListener('hashchange', router);
+window.addEventListener('hashchange', () => router());
 router();
 
 // =====================================================================
@@ -168,7 +171,7 @@ async function renderHome() {
     <div class="split split-single">
       <section class="side">
         <h1 class="title">그림 한 컷 보고<br /><mark>제목</mark>을 맞혀볼까요?</h1>
-        <p class="lead">문제마다 기회는 ${MAX_TRIES}번!</p>
+        <p class="lead">문제마다 ${TIME_LIMIT}초! 시간 안에는 몇 번이든 맞혀보세요.</p>
 
         <form class="card home-card">
           <p class="card-q">어떤 장르의 문제를 풀까요?</p>
@@ -243,9 +246,9 @@ async function renderHome() {
 async function renderPlay(category, mode, quizId) {
   const c = CATEGORIES[category];
   let quizzes;
-  let day = null;
+  let roundToken = null;
   try {
-    if (mode === 'daily') ({ day, quizzes } = await api.getDaily(category));
+    if (mode === 'daily') ({ quizzes, round: roundToken } = await api.getRound(category));
     else if (quizId) quizzes = [(await api.getQuiz(quizId)).quiz];
     else ({ quizzes } = await api.getPractice(category));
   } catch (err) {
@@ -262,7 +265,8 @@ async function renderPlay(category, mode, quizId) {
   const isDaily = mode === 'daily';
   const ids = quizzes.map((q) => q.id);
   const rec = {
-    items: ids.map(() => ({ guesses: [], solved: false, done: false, answer: null })),
+    // deadline: 그림이 뜬 순간부터 TIME_LIMIT 초 뒤 (performance.now 기준)
+    items: ids.map(() => ({ guesses: [], solved: false, done: false, timedOut: false, answer: null, deadline: null })),
     current: 0,
     done: false,
     submitted: null,
@@ -272,45 +276,63 @@ async function renderPlay(category, mode, quizId) {
   let nicknameError = '';
 
   const total = quizzes.length;
+  const LIMIT_MS = TIME_LIMIT * 1000;
+  const remainingOf = (item) => (item.deadline ? Math.max(0, item.deadline - performance.now()) : LIMIT_MS);
+
+  // 다음 그림을 미리 받아둬서 문제가 바뀔 때 시간이 새지 않게 합니다.
+  quizzes.forEach((q) => {
+    new Image().src = q.image;
+  });
+
+  // 남은 시간 표시 · 시간 초과 처리
+  const tick = () => {
+    const item = rec.items[rec.current];
+    if (rec.done || !item || item.done || !item.deadline) return;
+    const left = remainingOf(item);
+    const fill = view.querySelector('.timer-fill');
+    const sec = view.querySelector('.timer-sec');
+    if (fill) {
+      fill.style.transform = `scaleX(${left / LIMIT_MS})`;
+      fill.classList.toggle('is-low', left < 2000);
+    }
+    if (sec) sec.textContent = `${(left / 1000).toFixed(1)}초`;
+    if (left <= 0 && !busy) timeUp();
+  };
+  const timer = setInterval(tick, 50);
+  cleanup = () => clearInterval(timer);
 
   // ----- 한 문제 화면 -----
   const drawQuestion = () => {
     const i = rec.current;
     const quiz = quizzes[i];
     const item = rec.items[i];
-    const left = MAX_TRIES - item.guesses.length;
     const wrong = item.guesses.length - (item.solved ? 1 : 0);
     const canHint = quiz.hasHint && !item.done && wrong >= HINT_AFTER && !hints[i];
 
     const tried = item.guesses
       .map((g, k) => {
         const hit = item.solved && k === item.guesses.length - 1;
-        return `<li class="${hit ? 'hit' : 'miss'}">${g ? esc(g) : '패스'}</li>`;
+        return `<li class="${hit ? 'hit' : 'miss'}">${esc(g)}</li>`;
       })
       .join('');
-
-    const dots = Array.from({ length: MAX_TRIES }, (_, k) => {
-      let cls = 'dot';
-      if (k < item.guesses.length) cls += item.solved && k === item.guesses.length - 1 ? ' hit' : ' miss';
-      return `<i class="${cls}"></i>`;
-    }).join('');
 
     const isLast = i === total - 1;
     const bottom = item.done
       ? `
         <div class="reveal ${item.solved ? 'is-hit' : 'is-miss'}">
-          <span class="reveal-badge">${item.solved ? `정답! +${pointsFor(item.guesses.length, true)}점` : '아쉬워요'}</span>
+          <span class="reveal-badge">${item.solved ? '정답! +1점' : item.timedOut ? '시간 초과' : '아쉬워요'}</span>
           <strong class="reveal-answer">${esc(item.answer)}</strong>
         </div>
         <button type="button" class="btn btn-dark btn-wide" data-action="next">${isLast ? '결과 보기' : '다음 문제'} ${ARROW}</button>`
       : `
+        <div class="timer" role="timer" aria-label="남은 시간"><i class="timer-fill" style="transform: scaleX(${remainingOf(item) / LIMIT_MS})"></i></div>
         <form class="answer-bar" autocomplete="off">
           <label class="sr-only" for="guess">작품 제목</label>
           <input id="guess" name="guess" type="text" maxlength="60" placeholder="제목은?" enterkeyhint="send" />
           <button type="submit" class="btn btn-dark">정답 ${ARROW}</button>
         </form>
         <div class="stage-sub">
-          <span class="dots" aria-label="남은 기회 ${left}번">${dots}</span>
+          <span class="timer-sec">${(remainingOf(item) / 1000).toFixed(1)}초</span>
           ${tried ? `<ul class="tried">${tried}</ul>` : ''}
           <span class="sub-actions">
             ${canHint ? '<button type="button" class="link" data-action="hint">힌트</button>' : ''}
@@ -330,6 +352,19 @@ async function renderPlay(category, mode, quizId) {
       </div>`;
 
     view.querySelector('[data-zoom]').addEventListener('click', () => openZoom(quiz.image, item.done ? item.answer : ''));
+
+    // 그림이 뜨면 시간이 흐르기 시작해요. (다시 그려도 처음 정한 마감은 그대로)
+    if (!item.done && !item.deadline) {
+      const img = view.querySelector('.frame-photo img');
+      const start = () => {
+        item.deadline ??= performance.now() + LIMIT_MS;
+      };
+      if (img.complete) start();
+      else {
+        img.addEventListener('load', start, { once: true });
+        img.addEventListener('error', start, { once: true });
+      }
+    }
 
     const form = view.querySelector('.answer-bar');
     form?.addEventListener('submit', (e) => {
@@ -376,11 +411,11 @@ async function renderPlay(category, mode, quizId) {
   };
 
   const guess = async (value) => {
-    if (busy) return;
-    busy = true;
-    lock();
     const quiz = quizzes[rec.current];
     const item = rec.items[rec.current];
+    if (busy || remainingOf(item) <= 0) return;
+    busy = true;
+    lock();
     try {
       const result = await api.sendGuess(quiz.id, value);
       item.guesses.push(value);
@@ -388,10 +423,8 @@ async function renderPlay(category, mode, quizId) {
         item.solved = true;
         item.answer = result.answer;
         await finishItem(item, quiz);
-      } else if (item.guesses.length >= MAX_TRIES) {
-        await finishItem(item, quiz);
       } else {
-        toast(MAX_TRIES - item.guesses.length === 1 ? '땡! 마지막 기회' : '땡!', 'miss');
+        toast('땡!', 'miss');
       }
     } catch (err) {
       toast(err.message);
@@ -401,15 +434,21 @@ async function renderPlay(category, mode, quizId) {
     }
   };
 
-  /** 이 문제는 넘어갑니다. (남은 기회를 모두 패스로 채움) */
-  const pass = async () => {
+  /** 이 문제는 넘어갑니다. */
+  const pass = () => endItem(false);
+
+  /** 시간이 다 됐어요. */
+  const timeUp = () => endItem(true);
+
+  const endItem = async (timedOut) => {
     if (busy) return;
     busy = true;
     lock();
     const quiz = quizzes[rec.current];
     const item = rec.items[rec.current];
     try {
-      while (item.guesses.length < MAX_TRIES) item.guesses.push('');
+      item.timedOut = timedOut;
+      if (timedOut) toast('시간 초과!', 'miss');
       await finishItem(item, quiz);
     } catch (err) {
       toast(err.message);
@@ -426,7 +465,7 @@ async function renderPlay(category, mode, quizId) {
     try {
       const res = await api.submitResult({
         token: player.token,
-        day,
+        round: roundToken,
         category,
         items: rec.items.map((it, i) => ({ quizId: ids[i], guesses: it.guesses })),
       });
@@ -453,7 +492,13 @@ async function renderPlay(category, mode, quizId) {
     if (player) return '<div class="rank-box"><p>랭킹에 올리는 중…</p></div>';
     return `
       <form class="rank-box nick-form" autocomplete="off">
-        <label for="nickname">닉네임 등록하고 랭킹에 올리기</label>
+        <div class="nick-head">
+          <span class="nick-emoji" aria-hidden="true">🏆</span>
+          <div>
+            <label for="nickname">닉네임 등록하고 랭킹에 올리기</label>
+            <p class="nick-sub">이번 판 ${summarize(rec.items).points}점을 ${c.label} 랭킹에 올려보세요!</p>
+          </div>
+        </div>
         <div class="nick-row">
           <input id="nickname" name="nickname" class="input" type="text" minlength="2" maxlength="12" placeholder="닉네임 (2~12자)" />
           <button type="submit" class="btn btn-dark">등록</button>
@@ -462,10 +507,11 @@ async function renderPlay(category, mode, quizId) {
       </form>`;
   };
 
-  /** 못 맞힌 문제에서 마지막으로 낸 답 (전부 패스면 '패스', 취소선 없이) */
+  /** 못 맞힌 문제에서 마지막으로 낸 답 (낸 답이 없으면 '시간 초과' 또는 '패스') */
   const myAnswerOf = (item) => {
-    const last = item.guesses.filter(Boolean).at(-1);
-    return last ? `<s>${esc(last)}</s>` : '패스';
+    const last = item.guesses.at(-1);
+    if (last) return `<s>${esc(last)}</s>`;
+    return item.timedOut ? '시간 초과' : '패스';
   };
 
   const drawSummary = () => {
@@ -487,7 +533,7 @@ async function renderPlay(category, mode, quizId) {
 
     view.innerHTML = `
       <div class="stage stage-summary">
-        <div class="stage-top">${chip(category)}<span class="stage-tag">${isDaily ? '오늘의 판' : '연습'}</span></div>
+        <div class="stage-top">${chip(category)}${isDaily ? '' : '<span class="stage-tag">연습</span>'}</div>
         <h1 class="score"><mark>${s.correct}</mark> / ${s.total}</h1>
         ${rankBox()}
         <ul class="scene-grid">${scenes}</ul>
@@ -498,7 +544,8 @@ async function renderPlay(category, mode, quizId) {
         <p class="footnote"><a href="#/ranking?c=${category}">랭킹 보기</a></p>
       </div>`;
 
-    view.querySelector('[data-action="retry"]').addEventListener('click', retry);
+    // 다시 풀기: 새로 랜덤으로 뽑은 판을 풉니다.
+    view.querySelector('[data-action="retry"]').addEventListener('click', () => router());
 
     view.querySelectorAll('[data-scene]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -529,16 +576,6 @@ async function renderPlay(category, mode, quizId) {
         view.querySelector('#nickname')?.focus();
       }
     });
-  };
-
-  /** 같은 문제로 처음부터 다시 풉니다. (랭킹에는 처음 결과만 남아요) */
-  const retry = () => {
-    rec.items = ids.map(() => ({ guesses: [], solved: false, done: false, answer: null }));
-    rec.current = 0;
-    rec.done = false;
-    for (const key of Object.keys(hints)) delete hints[key];
-    window.scrollTo(0, 0);
-    draw();
   };
 
   const draw = () => {
@@ -581,7 +618,7 @@ async function renderRanking() {
         ${rankList(data.top, player?.nickname, '아직 기록이 없어요')}
         ${meOutside ? `<div class="rank-me">${rankList([data.me], player.nickname, '')}</div>` : ''}
       </div>
-      <p class="footnote">한 번에 맞히면 2점, 두 번째 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
+      <p class="footnote">맞힌 문제마다 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
     </div>`;
 }
 
@@ -759,7 +796,7 @@ async function renderAdminList() {
       <section class="card settings-card">
         <div class="settings-head">
           <h2 class="title-xs">한 판 문제 수</h2>
-          <p>사용자가 한 번 플레이할 때 푸는 문제 수예요. 오늘 이미 출제된 판은 그대로고, 다음 판부터 적용돼요.</p>
+          <p>사용자가 한 번 플레이할 때 푸는 문제 수예요. 저장하면 다음 판부터 바로 적용되고, 등록된 문제가 적으면 있는 만큼만 나가요.</p>
         </div>
         <div class="settings-rows">${settingRows()}</div>
         <button type="button" class="btn btn-dark btn-sm" data-action="save-settings" disabled>저장</button>
@@ -822,7 +859,7 @@ async function renderAdminList() {
       try {
         await api.adminResetRanking(key);
         toast(`${label} 랭킹을 초기화했어요`);
-        router();
+        router({ keepScroll: true });
       } catch (err) {
         btn.disabled = false;
         if (err.status === 401) router();
@@ -839,7 +876,7 @@ async function renderAdminList() {
       try {
         await api.adminDelete(quiz.id);
         toast('삭제했어요');
-        router();
+        router({ keepScroll: true });
       } catch (err) {
         btn.disabled = false;
         if (err.status === 401) router();

@@ -615,26 +615,34 @@ input::placeholder {
   padding: 0 8px;
 }
 
-.dots {
-  display: flex;
-  flex: none;
-  gap: 5px;
-}
-
-.dot {
-  width: 14px;
+/* 남은 시간 */
+.timer {
+  width: min(100%, 560px);
   height: 14px;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
+  border: 2.5px solid var(--ink);
+  border-radius: 999px;
   background: var(--white);
+  overflow: hidden;
 }
 
-.dot.miss {
+.timer-fill {
+  display: block;
+  height: 100%;
+  background: var(--mint);
+  transform-origin: left center;
+  transition: background-color 0.2s ease;
+}
+
+.timer-fill.is-low {
   background: var(--red);
 }
 
-.dot.hit {
-  background: var(--mint);
+.timer-sec {
+  flex: none;
+  min-width: 44px;
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .tried {
@@ -763,13 +771,52 @@ input::placeholder {
   color: var(--ink-muted);
 }
 
+/* 닉네임 등록: 결과 화면에서 눈에 띄게 (보라 스티커) */
 .nick-form {
   flex-direction: column;
   align-items: stretch;
+  gap: 14px;
+  padding: 20px 22px;
+  background: var(--purple-wash);
+  box-shadow: 6px 6px 0 var(--purple-strong);
+  animation: rise 0.3s ease;
+}
+
+.nick-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nick-emoji {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+  background: var(--yellow);
+  font-size: 26px;
+  transform: rotate(-6deg);
 }
 
 .nick-form label {
-  font-size: 15px;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.nick-sub {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.nick-form .btn {
+  background: var(--purple-strong);
+  border-color: var(--ink);
+  color: var(--white);
 }
 
 .nick-row {
