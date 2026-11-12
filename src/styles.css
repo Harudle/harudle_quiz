@@ -683,35 +683,6 @@ input::placeholder {
   font-weight: 600;
 }
 
-.reveal {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  text-align: center;
-  animation: rise 0.3s ease;
-}
-
-.reveal-badge {
-  padding: 3px 12px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--white);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.reveal.is-miss .reveal-badge {
-  background: var(--red);
-}
-
-.reveal-answer {
-  font-size: clamp(26px, 3.4vw, 36px);
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(transparent 55%, var(--purple) 55%, var(--purple) 94%, transparent 94%);
-}
-
 .stage .btn-wide {
   width: min(100%, 560px);
 }
@@ -1558,6 +1529,13 @@ input::placeholder {
 #toast.is-miss {
   border: var(--border);
   background: var(--red-pastel);
+  color: var(--ink);
+}
+
+/* 맞혔을 때: 민트 스티커 */
+#toast.is-hit {
+  border: var(--border);
+  background: var(--mint-frame);
   color: var(--ink);
 }
 

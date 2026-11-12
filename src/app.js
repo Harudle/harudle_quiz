@@ -15,10 +15,11 @@ const esc = (s) =>
   );
 
 let toastTimer;
-/** tone: 'miss' 이면 틀렸을 때의 붉은 토스트 */
+/** tone: 'miss' 면 틀렸을 때의 붉은 토스트, 'hit' 면 맞혔을 때의 민트 토스트 */
 function toast(message, tone = '') {
   toastEl.textContent = message;
   toastEl.classList.toggle('is-miss', tone === 'miss');
+  toastEl.classList.toggle('is-hit', tone === 'hit');
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2200);
@@ -306,25 +307,10 @@ async function renderPlay(category, mode, quizId) {
     const i = rec.current;
     const quiz = quizzes[i];
     const item = rec.items[i];
-    const wrong = item.guesses.length - (item.solved ? 1 : 0);
-    const canHint = quiz.hasHint && !item.done && wrong >= HINT_AFTER && !hints[i];
+    const canHint = quiz.hasHint && item.guesses.length >= HINT_AFTER && !hints[i];
+    const tried = item.guesses.map((g) => `<li class="miss">${esc(g)}</li>`).join('');
 
-    const tried = item.guesses
-      .map((g, k) => {
-        const hit = item.solved && k === item.guesses.length - 1;
-        return `<li class="${hit ? 'hit' : 'miss'}">${esc(g)}</li>`;
-      })
-      .join('');
-
-    const isLast = i === total - 1;
-    const bottom = item.done
-      ? `
-        <div class="reveal ${item.solved ? 'is-hit' : 'is-miss'}">
-          <span class="reveal-badge">${item.solved ? '정답! +1점' : item.timedOut ? '시간 초과' : '아쉬워요'}</span>
-          <strong class="reveal-answer">${esc(item.answer)}</strong>
-        </div>
-        <button type="button" class="btn btn-dark btn-wide" data-action="next">${isLast ? '결과 보기' : '다음 문제'} ${ARROW}</button>`
-      : `
+    const bottom = `
         <div class="timer" role="timer" aria-label="남은 시간"><i class="timer-fill" style="transform: scaleX(${remainingOf(item) / LIMIT_MS})"></i></div>
         <form class="answer-bar" autocomplete="off">
           <label class="sr-only" for="guess">작품 제목</label>
@@ -351,10 +337,10 @@ async function renderPlay(category, mode, quizId) {
         ${bottom}
       </div>`;
 
-    view.querySelector('[data-zoom]').addEventListener('click', () => openZoom(quiz.image, item.done ? item.answer : ''));
+    view.querySelector('[data-zoom]').addEventListener('click', () => openZoom(quiz.image));
 
     // 그림이 뜨면 시간이 흐르기 시작해요. (다시 그려도 처음 정한 마감은 그대로)
-    if (!item.done && !item.deadline) {
+    if (!item.deadline) {
       const img = view.querySelector('.frame-photo img');
       const start = () => {
         item.deadline ??= performance.now() + LIMIT_MS;
@@ -390,14 +376,7 @@ async function renderPlay(category, mode, quizId) {
         toast(err.message);
       }
     });
-    view.querySelector('[data-action="next"]')?.addEventListener('click', () => {
-      rec.current = i + 1;
-      if (rec.current >= total) rec.done = true;
-      draw();
-    });
-
-    if (item.done) view.querySelector('[data-action="next"]').focus();
-    else view.querySelector('#guess').focus({ preventScroll: true });
+    view.querySelector('#guess').focus({ preventScroll: true });
   };
 
   const lock = () =>
@@ -405,15 +384,26 @@ async function renderPlay(category, mode, quizId) {
       el.disabled = true;
     });
 
-  const finishItem = async (item, quiz) => {
+  /** 문제를 끝내고 바로 다음 문제로 넘어가요. 정답은 결과 화면에서 한꺼번에 보여줘요. */
+  const finishItem = (item, quiz) => {
     item.done = true;
-    item.answer ??= (await api.getAnswer(quiz.id)).answer;
+    if (!item.answer) {
+      item.answerLoading = api
+        .getAnswer(quiz.id)
+        .then((res) => {
+          item.answer = res.answer;
+        })
+        .catch(() => {});
+    }
+    rec.current += 1;
+    if (rec.current >= total) rec.done = true;
+    draw();
   };
 
   const guess = async (value) => {
     const quiz = quizzes[rec.current];
     const item = rec.items[rec.current];
-    if (busy || remainingOf(item) <= 0) return;
+    if (busy || rec.done || remainingOf(item) <= 0) return;
     busy = true;
     lock();
     try {
@@ -422,16 +412,17 @@ async function renderPlay(category, mode, quizId) {
       if (result.correct) {
         item.solved = true;
         item.answer = result.answer;
-        await finishItem(item, quiz);
       } else {
         toast('땡!', 'miss');
       }
     } catch (err) {
       toast(err.message);
-    } finally {
-      busy = false;
-      drawQuestion();
     }
+    busy = false;
+    if (item.solved) {
+      toast('정답!', 'hit');
+      finishItem(item, quiz);
+    } else drawQuestion();
   };
 
   /** 이 문제는 넘어갑니다. */
@@ -440,22 +431,12 @@ async function renderPlay(category, mode, quizId) {
   /** 시간이 다 됐어요. */
   const timeUp = () => endItem(true);
 
-  const endItem = async (timedOut) => {
-    if (busy) return;
-    busy = true;
-    lock();
-    const quiz = quizzes[rec.current];
+  const endItem = (timedOut) => {
+    if (busy || rec.done) return;
     const item = rec.items[rec.current];
-    try {
-      item.timedOut = timedOut;
-      if (timedOut) toast('시간 초과!', 'miss');
-      await finishItem(item, quiz);
-    } catch (err) {
-      toast(err.message);
-    } finally {
-      busy = false;
-      drawQuestion();
-    }
+    item.timedOut = timedOut;
+    if (timedOut) toast('시간 초과!', 'miss');
+    finishItem(item, quizzes[rec.current]);
   };
 
   // ----- 한 판 결과 -----
@@ -578,8 +559,10 @@ async function renderPlay(category, mode, quizId) {
     });
   };
 
-  const draw = () => {
+  const draw = async () => {
     if (rec.done) {
+      // 넘어가면서 받아오던 정답이 다 도착하면 결과를 보여줘요.
+      await Promise.all(rec.items.map((it) => it.answerLoading));
       drawSummary();
       if (isDaily && !rec.submitted && getPlayer()) submit();
     } else drawQuestion();
