@@ -227,6 +227,12 @@ main {
   padding: 24px 48px 40px;
 }
 
+/* 홈: 왼쪽 그림 없이 가운데 한 줄 */
+.split-single {
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
+}
+
 .side {
   display: flex;
   flex-direction: column;
@@ -274,66 +280,12 @@ button.frame-photo {
   background: var(--white);
 }
 
-.teaser {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  aspect-ratio: 1;
-  padding: 22px 20px 24px;
-  background: var(--white);
-  border: var(--border);
-  border-radius: 12px;
-}
-
-.teaser-text {
-  align-self: flex-start;
-  font-family: var(--font-hand);
-  font-size: clamp(22px, 2.4vw, 30px);
-  line-height: 1.2;
-}
-
-.teaser-q {
-  display: grid;
-  place-items: center;
-  width: 46%;
-  aspect-ratio: 1;
-  border: var(--border);
-  border-radius: 50%;
-  background: var(--bg);
-  font-family: var(--font-hand);
-  font-size: clamp(72px, 9vw, 120px);
-  line-height: 1;
-  transform: rotate(-8deg);
-}
-
-.teaser-icons {
-  display: flex;
-  gap: 18px;
-  font-size: clamp(28px, 3vw, 40px);
-}
-
-.teaser-icons i {
-  font-style: normal;
-}
-
-.teaser-icons i:nth-child(2) {
-  transform: translateY(-6px) rotate(6deg);
-}
-
 /* ---------- 카드 ---------- */
 .card {
   background: var(--white);
   border: var(--border);
   border-radius: 28px;
   padding: 28px 32px 22px;
-}
-
-.card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
 }
 
 .card-q {
@@ -352,42 +304,6 @@ button.frame-photo {
   border-top: 2px dashed var(--mint-line);
   font-size: 14px;
   color: var(--ink-soft);
-}
-
-.stamp {
-  display: flex;
-  flex: none;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 96px;
-  padding: 10px 12px 8px;
-  border: 2.5px dashed var(--ink);
-  border-radius: 8px;
-  transform: rotate(3deg);
-  text-align: center;
-}
-
-.stamp-title {
-  font-family: var(--font-hand);
-  font-size: 22px;
-  line-height: 1;
-}
-
-.stamp strong {
-  font-size: 24px;
-  font-weight: 800;
-  line-height: 1.1;
-}
-
-.stamp strong small {
-  font-size: 15px;
-  color: var(--ink-muted);
-}
-
-.stamp-sub {
-  font-size: 11px;
-  font-weight: 800;
 }
 
 /* 홈: 장르 고르기 */
@@ -479,20 +395,6 @@ button.frame-photo {
   font-weight: 800;
 }
 
-.status-new {
-  background: var(--ink);
-  color: var(--white);
-}
-
-.status-solved {
-  background: var(--bg);
-}
-
-.status-progress {
-  background: var(--purple-wash);
-  color: var(--purple-strong);
-}
-
 .status-empty {
   background: #f0f0f2;
   color: var(--ink-muted);
@@ -571,13 +473,6 @@ button.frame-photo {
   padding: 0 16px;
   font-size: 14px;
   border-width: 2px;
-}
-
-.btn-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  width: 100%;
 }
 
 .arrow {
@@ -836,13 +731,6 @@ input::placeholder {
   font-weight: 800;
   line-height: 1;
   letter-spacing: -0.04em;
-}
-
-.score-sub {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 1px;
 }
 
 .rank-box {
@@ -1669,10 +1557,6 @@ dialog.zoom img {
 }
 
 @media (max-width: 420px) {
-  .btn-row {
-    grid-template-columns: 1fr;
-  }
-
   .answer-bar .btn {
     padding: 0 18px;
   }

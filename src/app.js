@@ -1,17 +1,7 @@
 import * as api from './api.js';
 import { compressImage, loadImage } from './image.js';
 import { CATEGORIES, HINT_AFTER, MAX_TRIES, NICKNAME_RULE, normalize, pointsFor } from './shared.js';
-import {
-  getPlayer,
-  getRoundRecord,
-  getStats,
-  itemEmoji,
-  roundEmoji,
-  sameIds,
-  saveRoundRecord,
-  setPlayer,
-  summarize,
-} from './game.js';
+import { getPlayer, itemEmoji, setPlayer, summarize } from './game.js';
 
 const view = document.getElementById('view');
 const headerRight = document.getElementById('header-right');
@@ -152,28 +142,9 @@ router();
 // 홈
 // =====================================================================
 async function renderHome() {
-  const { day, categories } = await api.getCategories();
-  const stats = getStats();
+  const { categories } = await api.getCategories();
   const firstAvailable = categories.find((c) => c.count)?.key;
   let selected = firstAvailable ?? 'movie';
-
-  /** 오늘 정해진 판과 같은 판의 기록만 인정합니다. (중간에 문제가 바뀐 경우 무시) */
-  const recordOf = (key) => {
-    const record = getRoundRecord(key, day);
-    const { dailyIds } = categories.find((c) => c.key === key);
-    return record && sameIds(record.quizIds, dailyIds) ? record : null;
-  };
-
-  const statusOf = (key, count) => {
-    const record = recordOf(key);
-    if (!count) return '<span class="status status-empty">준비 중</span>';
-    if (record?.done) {
-      const s = summarize(record.items);
-      return `<span class="status status-solved">${s.correct}/${s.total} 맞힘</span>`;
-    }
-    if (record?.items?.some((it) => it.done)) return '<span class="status status-progress">푸는 중</span>';
-    return '<span class="status status-new">NEW</span>';
-  };
 
   const options = categories
     .map(({ key, count, roundSize }) => {
@@ -184,34 +155,21 @@ async function renderHome() {
           <span class="option-emoji" aria-hidden="true">${c.emoji}</span>
           <span class="option-body">
             <span class="option-title">${c.label}</span>
-            <span class="option-desc">${count ? `한 판 ${roundSize}문제` : c.desc}</span>
+            <span class="option-desc">${count ? `총 ${count}개 문제 중 ${roundSize}개가 출제돼요` : c.desc}</span>
           </span>
-          ${statusOf(key, count)}
+          ${count ? '' : '<span class="status status-empty">준비 중</span>'}
         </label>`;
     })
     .join('');
 
   view.innerHTML = `
-    <div class="split">
-      ${frame(`
-        <div class="teaser" aria-hidden="true">
-          <span class="teaser-text">이 장면… 어디서 봤더라?</span>
-          <span class="teaser-q">?</span>
-          <span class="teaser-icons"><i>🎬</i><i>📺</i><i>🍥</i></span>
-        </div>`)}
+    <div class="split split-single">
       <section class="side">
         <h1 class="title">그림 한 컷 보고<br /><mark>제목</mark>을 맞혀볼까요?</h1>
-        <p class="lead">${formatDay(day)} · 문제마다 기회는 ${MAX_TRIES}번!</p>
+        <p class="lead">문제마다 기회는 ${MAX_TRIES}번!</p>
 
         <form class="card home-card">
-          <div class="card-top">
-            <p class="card-q">오늘은 어떤 장르?</p>
-            <div class="stamp" aria-label="내 기록">
-              <span class="stamp-title">MY</span>
-              <strong>${stats.correct}<small>/${stats.total}</small></strong>
-              <span class="stamp-sub">맞힌 문제</span>
-            </div>
-          </div>
+          <p class="card-q">오늘은 어떤 장르?</p>
           <fieldset class="options">
             <legend class="sr-only">카테고리</legend>
             ${options}
@@ -241,9 +199,7 @@ async function renderHome() {
       label.textContent = '아직 문제가 없어요';
       return;
     }
-    label.textContent = recordOf(selected)?.done
-      ? `오늘의 ${CATEGORIES[selected].label} 결과 보기`
-      : `오늘의 ${CATEGORIES[selected].label} 풀기`;
+    label.textContent = `오늘의 ${CATEGORIES[selected].label} 풀기`;
   };
   updateLabel();
   view.querySelectorAll('input[name="category"]').forEach((input) =>
@@ -303,31 +259,15 @@ async function renderPlay(category, mode, quizId) {
 
   const isDaily = mode === 'daily';
   const ids = quizzes.map((q) => q.id);
-  const saved = isDaily ? getRoundRecord(category, day) : null;
-  const rec =
-    saved && sameIds(saved.quizIds, ids)
-      ? saved
-      : {
-          quizIds: ids,
-          items: ids.map(() => ({ guesses: [], solved: false, done: false, answer: null })),
-          current: 0,
-          done: false,
-          submitted: null,
-        };
+  const rec = {
+    items: ids.map(() => ({ guesses: [], solved: false, done: false, answer: null })),
+    current: 0,
+    done: false,
+    submitted: null,
+  };
   const hints = {};
   let busy = false;
   let nicknameError = '';
-
-  const persist = () => {
-    if (isDaily) saveRoundRecord(category, day, rec);
-  };
-
-  // 끝난 문제인데 정답이 없으면 받아옵니다.
-  await Promise.all(
-    rec.items.map(async (it, i) => {
-      if (it.done && !it.answer) it.answer = (await api.getAnswer(ids[i])).answer;
-    }),
-  );
 
   const total = quizzes.length;
 
@@ -416,7 +356,6 @@ async function renderPlay(category, mode, quizId) {
     view.querySelector('[data-action="next"]')?.addEventListener('click', () => {
       rec.current = i + 1;
       if (rec.current >= total) rec.done = true;
-      persist();
       draw();
     });
 
@@ -452,7 +391,6 @@ async function renderPlay(category, mode, quizId) {
       } else {
         toast(MAX_TRIES - item.guesses.length === 1 ? '땡! 마지막 기회' : '땡!');
       }
-      persist();
     } catch (err) {
       toast(err.message);
     } finally {
@@ -471,7 +409,6 @@ async function renderPlay(category, mode, quizId) {
     try {
       while (item.guesses.length < MAX_TRIES) item.guesses.push('');
       await finishItem(item, quiz);
-      persist();
     } catch (err) {
       toast(err.message);
     } finally {
@@ -492,7 +429,6 @@ async function renderPlay(category, mode, quizId) {
         items: rec.items.map((it, i) => ({ quizId: ids[i], guesses: it.guesses })),
       });
       rec.submitted = { rank: res.rank, participants: res.participants };
-      persist();
     } catch (err) {
       if (err.status === 401) setPlayer(null);
       else if (err.status === 409) rec.submitted = { rank: null, participants: 0, error: err.message };
@@ -543,13 +479,9 @@ async function renderPlay(category, mode, quizId) {
       <div class="stage stage-summary">
         <div class="stage-top">${chip(category)}<span class="stage-tag">${isDaily ? '오늘의 판' : '연습'}</span></div>
         <h1 class="score"><mark>${s.correct}</mark> / ${s.total}</h1>
-        <p class="score-sub">${s.points}점 · ${roundEmoji(rec.items)}</p>
         ${rankBox()}
         <ul class="scene-grid">${scenes}</ul>
-        <div class="btn-row">
-          <button type="button" class="btn btn-line" data-action="share">결과 복사</button>
-          <a class="btn btn-line" href="#/gallery/${category}">지난 장면 보기</a>
-        </div>
+        <a class="btn btn-line btn-wide" href="#/gallery/${category}">지난 장면 보기</a>
         <a class="btn btn-dark btn-wide" href="#/practice/${category}?t=${Date.now()}">연습 한 판 더 ${ARROW}</a>
         <p class="footnote"><a href="#/ranking?c=${category}">랭킹</a> · <a href="#/">다른 장르</a></p>
       </div>`;
@@ -560,20 +492,6 @@ async function renderPlay(category, mode, quizId) {
         openZoom(quizzes[i].image, rec.items[i].answer);
       }),
     );
-
-    view.querySelector('[data-action="share"]').addEventListener('click', async () => {
-      const text = [
-        `하루들 한컷퀴즈 ${c.emoji} ${c.label}${isDaily ? ` ${formatDay(day, false)}` : ' (연습)'}`,
-        `${roundEmoji(rec.items)} ${s.correct}/${s.total} · ${s.points}점`,
-        location.origin,
-      ].join('\n');
-      try {
-        await navigator.clipboard.writeText(text);
-        toast('결과를 복사했어요!');
-      } catch {
-        toast('복사에 실패했어요');
-      }
-    });
 
     const nickForm = view.querySelector('.nick-form');
     nickForm?.addEventListener('submit', async (e) => {
@@ -648,21 +566,7 @@ async function renderRanking() {
 // =====================================================================
 async function renderGallery(category) {
   const c = CATEGORIES[category];
-  const { day, rounds } = await api.getGallery(category);
-
-  // 오늘 판은 다 푼 사람에게만 보여줍니다.
-  let todayScenes = null;
-  const record = getRoundRecord(category, day);
-  if (record?.done) {
-    try {
-      const { quizzes } = await api.getDaily(category);
-      if (sameIds(record.quizIds, quizzes.map((q) => q.id))) {
-        todayScenes = quizzes.map((q, i) => ({ ...q, answer: record.items[i].answer, mark: itemEmoji(record.items[i]) }));
-      }
-    } catch {
-      // 오늘 문제가 없으면 건너뜁니다.
-    }
-  }
+  const { rounds } = await api.getGallery(category);
 
   const scenesHtml = (scenes) =>
     `<ul class="scene-grid">${scenes
@@ -671,7 +575,6 @@ async function renderGallery(category) {
         <li class="scene">
           <button type="button" class="scene-photo" data-src="${esc(s.image)}" data-answer="${esc(s.answer)}" aria-label="${esc(s.answer)} 크게 보기">
             <img src="${esc(s.image)}" alt="" loading="lazy" />
-            ${s.mark ? `<span class="scene-mark">${s.mark}</span>` : ''}
           </button>
           <span class="scene-answer">${esc(s.answer)}</span>
         </li>`,
@@ -682,14 +585,13 @@ async function renderGallery(category) {
     .map(([key, cc]) => `<a class="filter ${key === category ? 'active' : ''}" href="#/gallery/${key}">${cc.emoji} ${cc.label}</a>`)
     .join('');
 
-  const todayBlock = todayScenes
-    ? `<section class="day-group"><h2 class="day-title">오늘</h2>${scenesHtml(todayScenes)}</section>`
-    : `<section class="day-group">
-         <h2 class="day-title">오늘</h2>
-         <a class="card locked-today" href="#/play/${category}">
-           <span>오늘 판을 다 풀면 볼 수 있어요</span>${ARROW}
-         </a>
-       </section>`;
+  const todayBlock = `
+    <section class="day-group">
+      <h2 class="day-title">오늘</h2>
+      <a class="card locked-today" href="#/play/${category}">
+        <span>오늘 장면은 내일 공개돼요</span>${ARROW}
+      </a>
+    </section>`;
 
   view.innerHTML = `
     <div class="page">

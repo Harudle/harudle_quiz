@@ -81,7 +81,7 @@ scripts/import-json.js  예전 data/ 를 Supabase 로 옮기기
 src/shared.js        서버·브라우저 공용 (카테고리, 정답 비교, 날짜)
 src/app.js           화면 (홈, 퀴즈, 관리자)
 src/api.js           API 호출
-src/game.js          내 기록 (localStorage)
+src/game.js          결과 계산·표시, 닉네임 (브라우저에 저장하지 않음)
 src/image.js         업로드 사진 압축
 src/styles.css       스타일
 ```
