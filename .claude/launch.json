@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "harudle-quiz",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--env-file=.env", "--watch", "server.js"],
+      "port": 3000
+    }
+  ]
+}

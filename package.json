@@ -1,0 +1,19 @@
+{
+  "name": "harudle-quiz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "하루들 한컷퀴즈 — 그림 한 컷 보고 영화·드라마·애니 제목 맞히기",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "dev": "node --env-file=.env --watch server.js",
+    "build": "rm -rf dist && mkdir dist && cp -R index.html src dist/",
+    "import-json": "node --env-file=.env scripts/import-json.js"
+  },
+  "dependencies": {
+    "postgres": "^3.4.9"
+  }
+}
