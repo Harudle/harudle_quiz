@@ -79,10 +79,15 @@ const routes = [
   { pattern: /^\/ranking$/, render: renderRanking },
   { pattern: new RegExp(`^/gallery/${CAT}$`), render: (m) => renderGallery(m[1]) },
   { pattern: /^\/admin$/, render: renderAdminList, admin: true },
-  { pattern: /^\/admin\/new$/, render: renderAdminNew, admin: true },
+  { pattern: /^\/admin\/new$/, render: () => renderAdminForm(), admin: true },
+  { pattern: /^\/admin\/edit\/([\w-]+)$/, render: (m) => renderAdminForm(m[1]), admin: true },
 ];
 
 let cleanup = null;
+
+// 관리자 목록에서 수정하러 갈 때, 저장하고 돌아올 목록 주소와 스크롤 위치를 기억해요.
+let adminListReturn = null;
+let adminListScroll = null;
 
 /** keepScroll: 같은 화면을 다시 그릴 때 스크롤 위치를 그대로 둡니다. (관리자 삭제 등) */
 async function router({ keepScroll = false } = {}) {
@@ -747,6 +752,7 @@ async function renderAdminList() {
           ${q.hint ? `<p class="quiz-meta">💡 ${esc(q.hint)}</p>` : ''}
           <div class="quiz-actions">
             <a class="btn btn-line btn-sm" href="#/practice/${q.category}/${q.id}">풀어보기</a>
+            <a class="btn btn-line btn-sm" href="#/admin/edit/${q.id}" data-edit>수정</a>
             <button type="button" class="btn btn-ghost btn-sm" data-delete="${q.id}">삭제</button>
           </div>
         </div>
@@ -820,6 +826,19 @@ async function renderAdminList() {
     }
   });
 
+  // 수정하고 돌아오면 보던 위치로
+  if (adminListScroll !== null) {
+    window.scrollTo(0, adminListScroll);
+    adminListScroll = null;
+    adminListReturn = null;
+  }
+  view.querySelectorAll('[data-edit]').forEach((a) =>
+    a.addEventListener('click', () => {
+      adminListReturn = location.hash || '#/admin';
+      adminListScroll = window.scrollY;
+    }),
+  );
+
   // 랭킹 초기화
   view.querySelectorAll('[data-reset]').forEach((btn) =>
     btn.addEventListener('click', async () => {
@@ -857,9 +876,13 @@ async function renderAdminList() {
   );
 }
 
-async function renderAdminNew() {
-  const preset = queryOf().get('category');
-  let picked = null; // { img, url }
+/** quizId 가 있으면 그 문제를 고치고, 없으면 새 문제를 등록해요. */
+async function renderAdminForm(quizId) {
+  const editing = quizId ? (await api.adminGet(quizId)).quiz : null;
+  const preset = editing?.category ?? queryOf().get('category');
+  let picked = null; // { img, url } 새로 고른 그림 (수정할 때 안 고르면 원래 그림 그대로)
+  const returnTo = adminListReturn ?? `#/admin?c=${preset ?? ''}`;
+  const submitLabel = editing ? '수정 저장하기' : '문제 등록하기';
 
   view.innerHTML = `
     <form class="split upload-form" novalidate>
@@ -872,9 +895,14 @@ async function renderAdminNew() {
         </label>
         <div class="frame-photo preview" hidden></div>`)}
       <section class="side">
-        <a class="back-link" href="#/admin">← 문제 관리</a>
-        <h1 class="title">새 한 컷 문제<br /><mark>등록</mark>하기</h1>
-        <p class="lead">그림 한 장, 카테고리, 정답만 있으면 돼요.</p>
+        <a class="back-link" href="${editing ? returnTo : '#/admin'}">← 문제 관리</a>
+        ${
+          editing
+            ? `<h1 class="title">한 컷 문제<br /><mark>수정</mark>하기</h1>
+        <p class="lead">바꿀 곳만 고치고 저장하세요. 그림을 안 바꾸면 원래 그림 그대로예요.</p>`
+            : `<h1 class="title">새 한 컷 문제<br /><mark>등록</mark>하기</h1>
+        <p class="lead">그림 한 장, 카테고리, 정답만 있으면 돼요.</p>`
+        }
 
         <div class="card form-card">
           <fieldset class="field">
@@ -893,19 +921,19 @@ async function renderAdminNew() {
           </fieldset>
           <div class="field">
             <label class="field-label" for="answer">정답</label>
-            <input id="answer" name="answer" class="input-line" type="text" placeholder="예) 기생충" maxlength="60" required />
+            <input id="answer" name="answer" class="input-line" type="text" placeholder="예) 기생충" maxlength="60" required value="${esc(editing?.answer ?? '')}" />
           </div>
           <div class="field">
             <label class="field-label" for="aliases">다른 정답 <small>선택 · 쉼표로 구분</small></label>
-            <input id="aliases" name="aliases" class="input-line" type="text" placeholder="예) parasite, 패러사이트" />
+            <input id="aliases" name="aliases" class="input-line" type="text" placeholder="예) parasite, 패러사이트" value="${esc(editing?.aliases?.join(', ') ?? '')}" />
           </div>
           <div class="field">
             <label class="field-label" for="hint">힌트 <small>선택 · ${HINT_AFTER}번 틀리면 공개</small></label>
-            <input id="hint" name="hint" class="input-line" type="text" placeholder="예) 2019년 칸 영화제 황금종려상" maxlength="80" />
+            <input id="hint" name="hint" class="input-line" type="text" placeholder="예) 2019년 칸 영화제 황금종려상" maxlength="80" value="${esc(editing?.hint ?? '')}" />
           </div>
           <p class="card-foot"><span>띄어쓰기·대소문자·특수문자는 자동으로 무시하고 채점해요</span></p>
         </div>
-        <button type="submit" class="btn btn-dark btn-block">문제 등록하기 ${ARROW}</button>
+        <button type="submit" class="btn btn-dark btn-block">${submitLabel} ${ARROW}</button>
       </section>
     </form>
   `;
@@ -922,22 +950,22 @@ async function renderAdminNew() {
   cleanup = clear;
 
   const drawPreview = () => {
-    dropzone.hidden = Boolean(picked);
-    preview.hidden = !picked;
-    if (!picked) {
+    const src = picked?.url ?? editing?.image;
+    dropzone.hidden = Boolean(src);
+    preview.hidden = !src;
+    if (!src) {
       preview.innerHTML = '';
       return;
     }
     preview.innerHTML = `
-      <img src="${picked.url}" alt="올린 그림 미리보기" />
+      <img src="${esc(src)}" alt="문제 그림 미리보기" />
       <button type="button" class="photo-reset" data-action="reset">사진 바꾸기</button>`;
     preview.querySelector('[data-action="reset"]').addEventListener('click', () => {
-      clear();
       fileInput.value = '';
-      drawPreview();
       fileInput.click();
     });
   };
+  drawPreview();
 
   const handleFiles = async (fileList) => {
     const files = [...fileList].filter((f) => f.type.startsWith('image/'));
@@ -977,7 +1005,7 @@ async function renderAdminNew() {
   formEl.addEventListener('submit', async (e) => {
     e.preventDefault();
     const answer = formEl.answer.value.trim();
-    if (!picked) {
+    if (!picked && !editing) {
       toast('문제 그림을 먼저 올려주세요');
       return;
     }
@@ -989,29 +1017,37 @@ async function renderAdminNew() {
 
     const submitBtn = formEl.querySelector('[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.textContent = '올리는 중…';
+    submitBtn.textContent = editing ? '저장하는 중…' : '올리는 중…';
     try {
       const category = formEl.category.value;
-      const { img } = picked;
-      await api.adminCreate({
+      const input = {
         category,
         answer,
         aliases: formEl.aliases.value.split(',').map((s) => s.trim()).filter(Boolean),
         hint: formEl.hint.value.trim(),
-        image: compressImage(img),
-        aspect: +(img.naturalWidth / img.naturalHeight).toFixed(4),
-      });
-      toast(`${CATEGORIES[category].label} 문제를 등록했어요!`);
-      location.hash = `#/admin?c=${category}`;
+      };
+      if (picked) {
+        input.image = compressImage(picked.img);
+        input.aspect = +(picked.img.naturalWidth / picked.img.naturalHeight).toFixed(4);
+      }
+      if (editing) {
+        await api.adminUpdate(editing.id, input);
+        toast('문제를 수정했어요!');
+        location.hash = returnTo;
+      } else {
+        await api.adminCreate(input);
+        toast(`${CATEGORIES[category].label} 문제를 등록했어요!`);
+        location.hash = `#/admin?c=${category}`;
+      }
     } catch (err) {
       console.error(err);
       if (err.status === 401) {
         router();
         return;
       }
-      toast(err.message || '등록에 실패했어요');
+      toast(err.message || (editing ? '수정에 실패했어요' : '등록에 실패했어요'));
       submitBtn.disabled = false;
-      submitBtn.innerHTML = `문제 등록하기 ${ARROW}`;
+      submitBtn.innerHTML = `${submitLabel} ${ARROW}`;
     }
   });
 }

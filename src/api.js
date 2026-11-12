@@ -72,6 +72,8 @@ export async function adminLogin(password) {
 
 export const adminList = () => request('/admin/quizzes', { admin: true });
 export const adminCreate = (quiz) => request('/admin/quizzes', { method: 'POST', body: quiz, admin: true });
+export const adminGet = (id) => request(`/admin/quizzes/${enc(id)}`, { admin: true });
+export const adminUpdate = (id, quiz) => request(`/admin/quizzes/${enc(id)}`, { method: 'PUT', body: quiz, admin: true });
 export const adminDelete = (id) => request(`/admin/quizzes/${enc(id)}`, { method: 'DELETE', admin: true });
 export const adminRankingCounts = () => request('/admin/rankings', { admin: true });
 export const adminResetRanking = (category) =>
