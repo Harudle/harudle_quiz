@@ -462,19 +462,27 @@ async function renderPlay(category, mode, quizId) {
       </form>`;
   };
 
+  /** 못 맞힌 문제에서 마지막으로 낸 답 (전부 패스면 '패스', 취소선 없이) */
+  const myAnswerOf = (item) => {
+    const last = item.guesses.filter(Boolean).at(-1);
+    return last ? `<s>${esc(last)}</s>` : '패스';
+  };
+
   const drawSummary = () => {
     const s = summarize(rec.items);
     const scenes = quizzes
-      .map(
-        (q, i) => `
+      .map((q, i) => {
+        const item = rec.items[i];
+        return `
         <li class="scene">
-          <button type="button" class="scene-photo" data-scene="${i}" aria-label="${esc(rec.items[i].answer)} 크게 보기">
+          <button type="button" class="scene-photo" data-scene="${i}" aria-label="${esc(item.answer)} 크게 보기">
             <img src="${esc(q.image)}" alt="" loading="lazy" />
-            ${itemMark(rec.items[i])}
+            ${itemMark(item)}
           </button>
-          <span class="scene-answer">${esc(rec.items[i].answer)}</span>
-        </li>`,
-      )
+          <span class="scene-answer"><small class="scene-label">정답</small>${esc(item.answer)}</span>
+          ${item.solved ? '' : `<span class="scene-mine"><small class="scene-label">내 답</small>${myAnswerOf(item)}</span>`}
+        </li>`;
+      })
       .join('');
 
     view.innerHTML = `
@@ -483,9 +491,14 @@ async function renderPlay(category, mode, quizId) {
         <h1 class="score"><mark>${s.correct}</mark> / ${s.total}</h1>
         ${rankBox()}
         <ul class="scene-grid">${scenes}</ul>
-        <a class="btn btn-dark btn-wide" href="#/practice/${category}?t=${Date.now()}">연습 한 판 더 ${ARROW}</a>
-        <p class="footnote"><a href="#/ranking?c=${category}">랭킹</a> · <a href="#/">다른 장르</a></p>
+        <div class="summary-actions">
+          <button type="button" class="btn btn-dark" data-action="retry">다시 풀기</button>
+          <a class="btn btn-line" href="#/">홈으로</a>
+        </div>
+        <p class="footnote"><a href="#/ranking?c=${category}">랭킹 보기</a></p>
       </div>`;
+
+    view.querySelector('[data-action="retry"]').addEventListener('click', retry);
 
     view.querySelectorAll('[data-scene]').forEach((b) =>
       b.addEventListener('click', () => {
@@ -516,6 +529,16 @@ async function renderPlay(category, mode, quizId) {
         view.querySelector('#nickname')?.focus();
       }
     });
+  };
+
+  /** 같은 문제로 처음부터 다시 풉니다. (랭킹에는 처음 결과만 남아요) */
+  const retry = () => {
+    rec.items = ids.map(() => ({ guesses: [], solved: false, done: false, answer: null }));
+    rec.current = 0;
+    rec.done = false;
+    for (const key of Object.keys(hints)) delete hints[key];
+    window.scrollTo(0, 0);
+    draw();
   };
 
   const draw = () => {
@@ -558,7 +581,7 @@ async function renderRanking() {
         ${rankList(data.top, player?.nickname, '아직 기록이 없어요')}
         ${meOutside ? `<div class="rank-me">${rankList([data.me], player.nickname, '')}</div>` : ''}
       </div>
-      <p class="footnote">한 번에 맞히면 3점, 두 번째 2점, 세 번째 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
+      <p class="footnote">한 번에 맞히면 2점, 두 번째 1점${player ? ` · 내 닉네임 ${esc(player.nickname)}` : ''}</p>
     </div>`;
 }
 
@@ -651,7 +674,11 @@ function renderAdminLogin(message) {
 
 async function renderAdminList() {
   const filter = CATEGORIES[queryOf().get('c')] ? queryOf().get('c') : 'all';
-  const [{ quizzes }, settings] = await Promise.all([api.adminList(), api.adminGetSettings()]);
+  const [{ quizzes }, settings, { counts: rankingCounts }] = await Promise.all([
+    api.adminList(),
+    api.adminGetSettings(),
+    api.adminRankingCounts(),
+  ]);
   const list = filter === 'all' ? quizzes : quizzes.filter((q) => q.category === filter);
   const countOf = (key) => (key === 'all' ? quizzes.length : quizzes.filter((q) => q.category === key).length);
   const sizes = { ...settings.roundSize };
@@ -675,6 +702,18 @@ async function renderAdminList() {
         </div>`;
       })
       .join('');
+
+  const resetRows = Object.entries(CATEGORIES)
+    .map(([key, c]) => {
+      const n = rankingCounts[key];
+      return `
+        <div class="setting-row">
+          <span class="setting-label">${c.emoji} ${c.label}</span>
+          <button type="button" class="btn btn-line btn-sm btn-reset" data-reset="${key}" ${n ? '' : 'disabled'}>초기화</button>
+          <span class="setting-note">${n ? `${n}명 기록` : '기록이 없어요'}</span>
+        </div>`;
+    })
+    .join('');
 
   const filters = [['all', '전체'], ...Object.entries(CATEGORIES).map(([k, c]) => [k, `${c.emoji} ${c.label}`])]
     .map(
@@ -726,6 +765,14 @@ async function renderAdminList() {
         <button type="button" class="btn btn-dark btn-sm" data-action="save-settings" disabled>저장</button>
       </section>
 
+      <section class="card settings-card">
+        <div class="settings-head">
+          <h2 class="title-xs">랭킹 초기화</h2>
+          <p>장르의 누적 랭킹 기록을 모두 지워요. 문제와 닉네임은 그대로예요.</p>
+        </div>
+        <div class="settings-rows">${resetRows}</div>
+      </section>
+
       <nav class="filters" aria-label="카테고리 필터">${filters}</nav>
       ${
         list.length
@@ -764,6 +811,25 @@ async function renderAdminList() {
       toast(err.message);
     }
   });
+
+  // 랭킹 초기화
+  view.querySelectorAll('[data-reset]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      const key = btn.dataset.reset;
+      const { label } = CATEGORIES[key];
+      if (!confirm(`${label} 랭킹을 초기화할까요?\n${rankingCounts[key]}명의 기록이 모두 지워지고 되돌릴 수 없어요.`)) return;
+      btn.disabled = true;
+      try {
+        await api.adminResetRanking(key);
+        toast(`${label} 랭킹을 초기화했어요`);
+        router();
+      } catch (err) {
+        btn.disabled = false;
+        if (err.status === 401) router();
+        else toast(err.message);
+      }
+    }),
+  );
 
   view.querySelectorAll('[data-delete]').forEach((btn) =>
     btn.addEventListener('click', async () => {

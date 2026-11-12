@@ -77,6 +77,9 @@ export async function adminLogin(password) {
 export const adminList = () => request('/admin/quizzes', { admin: true });
 export const adminCreate = (quiz) => request('/admin/quizzes', { method: 'POST', body: quiz, admin: true });
 export const adminDelete = (id) => request(`/admin/quizzes/${enc(id)}`, { method: 'DELETE', admin: true });
+export const adminRankingCounts = () => request('/admin/rankings', { admin: true });
+export const adminResetRanking = (category) =>
+  request(`/admin/rankings/${enc(category)}`, { method: 'DELETE', admin: true });
 export const adminGetSettings = () => request('/admin/settings', { admin: true });
 export const adminSaveSettings = (roundSize) =>
   request('/admin/settings', { method: 'PUT', body: { roundSize }, admin: true });

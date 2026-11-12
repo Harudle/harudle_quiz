@@ -249,7 +249,6 @@ main {
   background: var(--white);
   border: var(--border);
   border-radius: 30px;
-  transform: rotate(-2deg);
 }
 
 .frame-inner {
@@ -569,7 +568,6 @@ button.frame-photo {
   max-width: none;
   padding: 12px;
   border-radius: 26px;
-  transform: rotate(-1.2deg);
 }
 
 .frame-stage .frame-inner {
@@ -847,11 +845,59 @@ input::placeholder {
   background: var(--red-pastel);
 }
 
+.scene-answer,
+.scene-mine {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 .scene-answer {
   font-size: 14px;
   font-weight: 700;
-  text-align: center;
-  overflow-wrap: anywhere;
+}
+
+/* 못 맞힌 문제: 내가 낸 답 */
+.scene-mine {
+  margin-top: -2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.scene-mine s {
+  text-decoration-color: var(--red);
+  text-decoration-thickness: 2px;
+}
+
+.scene-label {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--white);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.scene-mine .scene-label {
+  background: var(--red-pastel);
+  color: var(--ink);
+}
+
+.summary-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: min(100%, 560px);
+}
+
+.summary-actions .btn {
+  min-height: 58px;
+  font-size: 17px;
 }
 
 /* ---------- 랭킹 ---------- */
@@ -1141,13 +1187,14 @@ input::placeholder {
 
 .setting-row {
   display: grid;
-  grid-template-columns: 80px auto 1fr;
+  grid-template-columns: 112px auto 1fr;
   align-items: center;
   gap: 12px;
 }
 
 .setting-label {
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .stepper {
@@ -1186,6 +1233,16 @@ input::placeholder {
 .setting-note {
   font-size: 13px;
   color: var(--ink-muted);
+}
+
+.settings-card + .settings-card {
+  margin-top: 14px;
+}
+
+.btn-reset:not(:disabled):hover {
+  border-color: var(--red);
+  background: var(--red-wash);
+  color: var(--red);
 }
 
 .setting-note.warn {
@@ -1542,7 +1599,6 @@ dialog.zoom img {
     max-width: 480px;
     padding: 12px;
     border-radius: 24px;
-    transform: rotate(-1.5deg);
   }
 
   .frame-inner {
@@ -1607,7 +1663,7 @@ dialog.zoom img {
   }
 
   .setting-row {
-    grid-template-columns: 70px auto;
+    grid-template-columns: 104px auto;
   }
 
   .setting-note {

@@ -6,14 +6,14 @@ export const CATEGORIES = {
 };
 
 /** 한 문제당 기회 */
-export const MAX_TRIES = 3;
+export const MAX_TRIES = 2;
 /** 이만큼 틀리면 힌트를 볼 수 있어요. */
 export const HINT_AFTER = 1;
 /** 한 판에 푸는 문제 수 (관리자가 장르별로 바꿀 수 있어요) */
 export const DEFAULT_ROUND_SIZE = 5;
 export const MAX_ROUND_SIZE = 20;
 
-/** 첫 번째 기회에 맞히면 3점, 두 번째 2점, 세 번째 1점 */
+/** 첫 번째 기회에 맞히면 2점, 두 번째 1점 */
 export function pointsFor(tries, solved) {
   return solved ? MAX_TRIES - tries + 1 : 0;
 }
