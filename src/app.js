@@ -2,6 +2,7 @@ import * as api from './api.js';
 import { compressImage, loadImage } from './image.js';
 import { CATEGORIES, HINT_AFTER, NICKNAME_RULE, TIME_LIMIT, normalize } from './shared.js';
 import { itemMark, summarize } from './game.js';
+import { playCorrect, unlockSound } from './sound.js';
 
 const view = document.getElementById('view');
 const headerRight = document.getElementById('header-right');
@@ -369,6 +370,7 @@ async function renderPlay(category, mode, quizId) {
         toast('이미 입력한 답이에요');
         return;
       }
+      unlockSound();
       guess(value);
     });
     view.querySelector('[data-action="pass"]')?.addEventListener('click', () => pass());
@@ -425,6 +427,7 @@ async function renderPlay(category, mode, quizId) {
     }
     busy = false;
     if (item.solved) {
+      playCorrect();
       toast('정답!', 'hit');
       finishItem(item, quiz);
     } else drawQuestion();
